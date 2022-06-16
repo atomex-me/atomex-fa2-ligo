@@ -1,28 +1,28 @@
 type txParam is list (address * (nat * nat));
 type transferParam is list (address * txParam);
 
-type initiateParam is record
-  hashedSecret: bytes;
-  participant: address;
-  refundTime: timestamp;
-  tokenAddress: address;
-  tokenId: nat;
-  totalAmount: nat;
-end
+type initiateParam is record [
+    hashedSecret: bytes;
+    participant: address;
+    refundTime: timestamp;
+    tokenAddress: address;
+    tokenId: nat;
+    totalAmount: nat;
+  ]
 
 type parameter is 
   | Initiate of initiateParam
   | Redeem of bytes
   | Refund of bytes
 
-type swapState is record
-  initiator: address;
-  participant: address;
-  refundTime: timestamp;
-  tokenAddress: address;
-  tokenId: nat;
-  totalAmount: nat;
-end
+type swapState is record [
+    initiator: address;
+    participant: address;
+    refundTime: timestamp;
+    tokenAddress: address;
+    tokenId: nat;
+    totalAmount: nat;
+  ]
 
 type storage is big_map(bytes, swapState);
 
@@ -50,7 +50,7 @@ type storage is big_map(bytes, swapState);
 
 function doInitiate(const initiate: initiateParam; var s: storage) : (list(operation) * storage) is 
   block {
-    if (initiate.refundTime <= now) then failwith("refund time has already come"); else skip;
+    if (initiate.refundTime <= Tezos.now) then failwith("refund time has already come"); else skip;
     if (32n =/= Bytes.length(initiate.hashedSecret)) then failwith("hash size doesn't equal 32 bytes"); else skip;
     if (Tezos.source = initiate.participant) then failwith("SOURCE cannot act as participant"); else skip;
     if (Tezos.sender = initiate.participant) then failwith("SENDER cannot act as participant"); else skip;
@@ -65,10 +65,10 @@ function doInitiate(const initiate: initiateParam; var s: storage) : (list(opera
         totalAmount = initiate.totalAmount;
       ];
 
-    case s[initiate.hashedSecret] of
+    case s[initiate.hashedSecret] of [
       | None -> s[initiate.hashedSecret] := state
       | _ -> failwith("swap for this hash is already initiated")
-    end;
+    ];
 
     const transferEntry: contract(transferParam) = getTransferEntry(initiate.tokenAddress);
     const depositTx: operation = transfer(
@@ -80,7 +80,7 @@ function doRedeem(const secret: bytes; var s: storage) : (list(operation) * stor
     if (32n =/= Bytes.length(secret)) then failwith("secret size doesn't equal 32 bytes"); else skip;
     const hashedSecret: bytes = Crypto.sha256(Crypto.sha256(secret));
     const swap: swapState = getSwapState(hashedSecret, s);
-    if (now >= swap.refundTime) then failwith("refund time has already come"); else skip;
+    if (Tezos.now >= swap.refundTime) then failwith("refund time has already come"); else skip;
 
     remove hashedSecret from map s;
 
@@ -91,7 +91,7 @@ function doRedeem(const secret: bytes; var s: storage) : (list(operation) * stor
 function doRefund(const hashedSecret: bytes; var s: storage) : (list(operation) * storage) is
   block {
     const swap: swapState = getSwapState(hashedSecret, s);
-    if (now < swap.refundTime) then failwith("refund time hasn't come"); else skip;
+    if (Tezos.now < swap.refundTime) then failwith("refund time hasn't come"); else skip;
 
     remove hashedSecret from map s;
 
