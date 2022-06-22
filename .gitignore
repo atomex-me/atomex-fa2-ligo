@@ -1,7 +1,12 @@
+# contract results
+build/
+
+# dependencies
 node_modules
+
+# misc
 .granary/
 *.pp.ligo
-atomex.tz
 .idea
 .pytest_cache
 __pycache__
