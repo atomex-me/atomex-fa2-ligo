@@ -1,5 +1,7 @@
 # pylint: disable=no-member
 
+# TODO: update tests
+
 from os.path import dirname, join
 from unittest import TestCase
 

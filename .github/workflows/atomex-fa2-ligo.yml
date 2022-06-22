@@ -1,0 +1,39 @@
+name: atomex-fa2-ligo
+on:
+  push:
+    branches:
+      - master
+      - develop
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+env:
+  ligo-version: 0.44.0
+  ligo-command: docker run --rm -v \"\$PWD\":\"\$PWD\" -w \"\$PWD\" ligolang/ligo:0.44.0
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@master
+
+      - name: Set up LIGO
+        run: docker pull ligolang/ligo:${{ env.ligo-version }}
+
+      - name: Print environment info
+        run: eval "${{ env.ligo-command }} --version"
+
+      - name: Build
+        shell: bash
+        run: |
+          chmod +x ./scripts/build.sh
+          ./scripts/build.sh
+
+      - name: Upload the build as an artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: contracts
+          path: build
+          retention-days: 10
