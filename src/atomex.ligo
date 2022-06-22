@@ -8,7 +8,8 @@ type initiateParam is record [
     tokenAddress: address;
     tokenId: nat;
     totalAmount: nat;
-  ]
+    payoffAmount: nat;
+]
 
 type parameter is 
   | Initiate of initiateParam
@@ -22,7 +23,8 @@ type swapState is record [
     tokenAddress: address;
     tokenId: nat;
     totalAmount: nat;
-  ]
+    payoffAmount: nat;
+]
 
 type storage is big_map(bytes, swapState);
 
@@ -48,8 +50,21 @@ type storage is big_map(bytes, swapState);
     const op: operation = Tezos.transaction(params, 0tz, transferEntry);
   } with op;
 
+[@inline] function transferPayoff(
+    const transferEntry: contract(transferParam); 
+    const id: nat; 
+    const payoffAmount: nat
+) : list(operation) is
+  block {
+    const hasPayoff: bool = payoffAmount > 0n;
+  } with case hasPayoff of [
+    | True -> list[transfer(transferEntry, id, Tezos.get_self_address(), Tezos.get_sender(), payoffAmount)]
+    | False -> (nil : list(operation))
+  ];
+
 function doInitiate(const initiate: initiateParam; var s: storage) : (list(operation) * storage) is 
   block {
+    if (initiate.payoffAmount > initiate.totalAmount) then failwith("payoff amount exceeds the total") else skip;
     if (initiate.refundTime <= Tezos.get_now()) then failwith("refund time has already come") else skip;
     if (32n =/= Bytes.length(initiate.hashedSecret)) then failwith("hash size doesn't equal 32 bytes") else skip;
     if (Tezos.get_source() = initiate.participant) then failwith("SOURCE cannot act as participant") else skip;
@@ -63,6 +78,7 @@ function doInitiate(const initiate: initiateParam; var s: storage) : (list(opera
         tokenAddress = initiate.tokenAddress;
         tokenId = initiate.tokenId;
         totalAmount = initiate.totalAmount;
+        payoffAmount = initiate.payoffAmount;
       ];
 
     case s[initiate.hashedSecret] of [
@@ -85,8 +101,10 @@ function doRedeem(const secret: bytes; var s: storage) : (list(operation) * stor
     remove hashedSecret from map s;
 
     const transferEntry: contract(transferParam) = getTransferEntry(swap.tokenAddress);
-    const redeemTx: operation = transfer(transferEntry, swap.tokenId, Tezos.get_self_address(), swap.participant, swap.totalAmount);
-  } with (list[redeemTx], s) 
+    const redeemAmount: nat = abs(swap.totalAmount - swap.payoffAmount);
+    const redeemOperation: operation = transfer(transferEntry, swap.tokenId, Tezos.get_self_address(), swap.participant, redeemAmount);
+    const payoffOperations: list(operation) = transferPayoff(transferEntry, swap.tokenId, swap.payoffAmount);
+  } with (redeemOperation # payoffOperations, s) 
 
 function doRefund(const hashedSecret: bytes; var s: storage) : (list(operation) * storage) is
   block {
